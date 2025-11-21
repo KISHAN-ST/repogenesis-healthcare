@@ -75,6 +75,6 @@ In the `docs/` and `starter/` folders, you will find:
 
 ## Goal
 
-Your project should aim to **improve health, wellness, or medical workflow** using responsible engineering practices.
+Your project  aims to **improve health, wellness, or medical workflow** using responsible engineering practices.
 
-Happy Hacking!
+
