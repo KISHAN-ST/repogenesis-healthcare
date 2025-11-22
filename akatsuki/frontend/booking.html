@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Akatsuki — Confirm Booking</title>
+<link rel="icon" href="" />
+<style>
+  :root{
+    --bg1:#0ea5a4;
+    --bg2:#10b981;
+    --panel-bg: rgba(255,255,255,0.92);
+    --text:#04251a;
+    --muted: rgba(4,37,26,0.65);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial}
+  body{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:28px;
+    background: linear-gradient(135deg,var(--bg1) 0%, var(--bg2) 70%, #047857 100%);
+    color:var(--text);
+  }
+
+  .container{
+    width:100%;
+    max-width:880px;
+    border-radius:14px;
+    background:var(--panel-bg);
+    box-shadow:0 14px 40px rgba(2,6,23,0.15);
+    padding:22px;
+  }
+
+  .header{display:flex;gap:12px;align-items:center}
+  .logo{width:56px;height:56px;border-radius:12px;background:#04251a;color:white;display:flex;align-items:center;justify-content:center;font-weight:800}
+  h1{margin:0;font-size:20px}
+  p.lead{margin:6px 0 0;color:var(--muted);font-size:13px}
+
+  form{margin-top:18px;display:grid;gap:10px}
+  label{font-weight:700;color:#063f2a}
+  input[type="text"], input[type="tel"], textarea{
+    width:100%;padding:10px;border-radius:10px;border:1px solid rgba(6,63,42,0.08);background:white;color:var(--text);
+    font-size:15px;
+  }
+  textarea{resize:vertical}
+
+  .row{display:flex;gap:12px}
+  .row .col{flex:1}
+
+  .summary{
+    margin-top:10px;padding:12px;border-radius:10px;background:#f0fdf4;border:1px solid rgba(6,63,42,0.06);
+    color:#064e3b;
+  }
+
+  .actions{display:flex;gap:12px;margin-top:12px;flex-wrap:wrap}
+  .btn{padding:12px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:800}
+  .btn-primary{background:#065f46;color:white}
+  .btn-ghost{background:transparent;border:1px solid rgba(6,63,42,0.08);color:var(--text)}
+
+  /* result block */
+  .result-block{margin-top:14px;display:none}
+  .result-inner{padding:12px;border-radius:10px;background:#ecfeff;border:1px solid rgba(6,95,70,0.06)}
+  .result-inner div{margin-top:6px}
+
+  .small{font-size:13px;color:var(--muted)}
+  @media (max-width:720px){
+    .row{flex-direction:column}
+  }
+</style>
+</head>
+<body>
+  <div class="container" role="main">
+    <div class="header">
+      <div class="logo">A</div>
+      <div>
+        <h1>Confirm & Book — Akatsuki</h1>
+        <p class="lead">Quick booking (demo). This page fills hospital & slot automatically and calls your backend `/book` endpoint.</p>
+      </div>
+    </div>
+
+    <form id="bookingForm" onsubmit="return false;">
+      <label for="hospital">Hospital</label>
+      <input id="hospital" type="text" readonly />
+
+      <label for="slot">Chosen slot</label>
+      <input id="slot" type="text" readonly />
+
+      <div class="row">
+        <div class="col">
+          <label for="name">Your name</label>
+          <input id="name" type="text" placeholder="Full name" />
+        </div>
+        <div class="col">
+          <label for="phone">Phone</label>
+          <input id="phone" type="tel" placeholder="Mobile number" />
+        </div>
+      </div>
+
+      <label for="notes">Notes (optional)</label>
+      <textarea id="notes" rows="3" placeholder="Any notes for hospital (allergies / urgent info)"></textarea>
+
+      <div class="summary" id="summaryBox">
+        <div><strong>Demo fee:</strong> ₹199 (simulated)</div>
+        <div class="small">Payment is simulated in the demo. Booking reserves a token and returns an estimated wait time.</div>
+      </div>
+
+      <div class="actions">
+        <button id="confirmBtn" class="btn btn-primary" type="button">Confirm & Pay (simulate)</button>
+        <button id="backBtn" class="btn btn-ghost" type="button">Back to Predict</button>
+      </div>
+    </form>
+
+    <div id="resultBlock" class="result-block" aria-live="polite">
+      <div class="result-inner">
+        <div style="font-weight:800">Booking confirmed ✅</div>
+        <div>Booking ID: <span id="bk_id"></span></div>
+        <div>Hospital: <span id="bk_hosp"></span></div>
+        <div>Slot: <span id="bk_slot"></span></div>
+        <div>Token: <span id="bk_token"></span></div>
+        <div>Estimated wait: <span id="bk_wait"></span> mins</div>
+      </div>
+
+      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
+        <button id="doneBtn" class="btn btn-primary">Done</button>
+        <button id="bookAnother" class="btn btn-ghost">Book another</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/*
+  booking.html script:
+  - Reads hospital & slot from URL query parameters (preferred)
+  - If not present, falls back to localStorage keys set by predict page:
+      - 'ak_booking_hospital'
+      - 'ak_booking_slot'
+  - Posts booking payload to http://127.0.0.1:8000/book
+  - Shows confirmation on success
+*/
+
+function readQuery(name) {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    return p.get(name) || '';
+  } catch(e) { return ''; }
+}
+
+function populateFields() {
+  const qsHospital = decodeURIComponent(readQuery('hospital') || '').trim();
+  const qsSlot = decodeURIComponent(readQuery('slot') || '').trim();
+
+  const localHosp = localStorage.getItem('ak_booking_hospital') || '';
+  const localSlot = localStorage.getItem('ak_booking_slot') || '';
+
+  const hospital = qsHospital || localHosp || '';
+  const slot = qsSlot || localSlot || '';
+
+  document.getElementById('hospital').value = hospital;
+  document.getElementById('slot').value = slot;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  populateFields();
+
+  document.getElementById('backBtn').addEventListener('click', () => {
+    // keep hospital in localStorage so predict can preselect if desired
+    const hosp = document.getElementById('hospital').value || '';
+    if (hosp) localStorage.setItem('ak_booking_hospital', hosp);
+    window.location.href = 'predict.html';
+  });
+
+  document.getElementById('confirmBtn').addEventListener('click', onConfirm);
+  document.getElementById('doneBtn').addEventListener('click', () => {
+    // clear and go home
+    localStorage.removeItem('ak_booking_slot');
+    localStorage.removeItem('ak_booking_hospital');
+    window.location.href = 'index.html';
+  });
+  document.getElementById('bookAnother').addEventListener('click', () => {
+    window.location.href = 'predict.html';
+  });
+});
+
+async function onConfirm() {
+  const name = document.getElementById('name').value.trim();
+  const phone = document.getElementById('phone').value.trim();
+  const hospital = document.getElementById('hospital').value.trim();
+  const slot = document.getElementById('slot').value.trim();
+  const notes = document.getElementById('notes').value.trim();
+
+  if (!hospital) return alert('Hospital is missing. Go back to Predict and select a slot.');
+  if (!slot) return alert('Slot is missing. Go back to Predict and select a slot.');
+  if (!name) return alert('Please enter your name.');
+  if (!phone) return alert('Please enter your phone number.');
+
+  // Save booking info locally (helpful for next flow)
+  localStorage.setItem('ak_booking_hospital', hospital);
+  localStorage.setItem('ak_booking_slot', slot);
+
+  const payload = {
+    hospital,
+    slot,
+    name,
+    phone,
+    fee_paid: 199.0,   // demo
+    notes
+  };
+
+  try {
+    const res = await fetch('http://127.0.0.1:8000/book', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      alert('Booking failed: ' + text);
+      return;
+    }
+
+    const data = await res.json();
+
+    // show confirmation
+    document.getElementById('bookingForm').style.display = 'none';
+    document.getElementById('resultBlock').style.display = 'block';
+    document.getElementById('bk_id').innerText = data.booking_id || '—';
+    document.getElementById('bk_hosp').innerText = data.hospital || hospital;
+    document.getElementById('bk_slot').innerText = data.slot || slot;
+    document.getElementById('bk_token').innerText = data.token || '—';
+    document.getElementById('bk_wait').innerText = data.estimated_wait || '—';
+
+  } catch (err) {
+    console.error(err);
+    alert('Network error — make sure your FastAPI backend is running at http://127.0.0.1:8000');
+  }
+}
+</script>
+</body>
+</html>
