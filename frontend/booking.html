@@ -164,11 +164,11 @@ function populateFields() {
 document.addEventListener('DOMContentLoaded', () => {
   populateFields();
 
-    document.getElementById('backBtn').addEventListener('click', () => {
+  document.getElementById('backBtn').addEventListener('click', () => {
     // keep hospital in localStorage so predict can preselect if desired
     const hosp = document.getElementById('hospital').value || '';
     if (hosp) localStorage.setItem('ak_booking_hospital', hosp);
-    window.location.href = '/static/predict.html';
+    window.location.href = 'predict.html';
   });
 
   document.getElementById('confirmBtn').addEventListener('click', onConfirm);
@@ -176,10 +176,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // clear and go home
     localStorage.removeItem('ak_booking_slot');
     localStorage.removeItem('ak_booking_hospital');
-    window.location.href = '/ui';
+    window.location.href = 'index.html';
   });
   document.getElementById('bookAnother').addEventListener('click', () => {
-    window.location.href = '/static/predict.html';
+    window.location.href = 'predict.html';
   });
 });
 
@@ -209,7 +209,7 @@ async function onConfirm() {
   };
 
   try {
-    const res = await fetch('/book', {
+    const res = await fetch('http://127.0.0.1:8000/book', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(payload)

@@ -31,15 +31,12 @@
     box-shadow: 0 10px 30px rgba(2,6,23,0.5);
     backdrop-filter: blur(10px);
   }
-select {
-    color: #000 !important;
-    background-color: #fff !important;
-}
 
-select option {
+  /* Force dropdown / option readable on dark background */
+  select, option {
     color: #000 !important;
     background-color: #fff !important;
-}
+  }
 
   .brand {
     display:flex;align-items:center;gap:12px;margin-bottom:12px;
@@ -193,20 +190,21 @@ select option {
   </div>
 
 <script>
-  // map hospital names to images (your uploaded files)
-    const HOSPITALS = [
-    { id: "Manipal", img: "/static/h1.jpg", subtitle: "Manipal Hospital" },
-    { id: "Apollo", img: "/static/h2.jpg", subtitle: "Apollo Hospital" },
-    { id: "Fortis", img: "/static/h3.jpg", subtitle: "Fortis" },
-    { id: "Govt PHC", img: "/static/h4.jpg", subtitle: "Govt PHC" },
-    { id: "Aster Clinic", img: "/static/h5.jpg", subtitle: "Aster Clinic" }
+  // map hospital names to images (use full local paths that exist in your dev environment)
+  const HOSPITALS = [
+    { id: "Manipal", img: "h1.jpg", subtitle: "Manipal Hospital" },
+    { id: "Apollo", img: "h2.jpg", subtitle: "Apollo Hospital" },
+    { id: "Fortis", img: "h3.jpg", subtitle: "Fortis" },
+    { id: "Govt PHC", img: "h4.jpg", subtitle: "Govt PHC" },
+    { id: "Aster Clinic", img: "h5.jpg", subtitle: "Aster Clinic" }
   ];
 
-  let selectedHospital = HOSPITALS[0].id;
+  let selectedHospital = '';
   let selectedSlot = null;
 
   function buildHospitalCards(){
     const container = document.getElementById('hospitalList');
+    container.innerHTML = '';
     HOSPITALS.forEach(h=>{
       const card = document.createElement('div'); card.className='hcard'; card.dataset.name=h.id;
       const img = document.createElement('img'); img.src=h.img; img.alt=h.id;
@@ -219,8 +217,11 @@ select option {
       });
       container.appendChild(card);
     });
-    // pre-select first
-    container.firstChild.classList.add('sel');
+    // pre-select first if exists (defensive)
+    if (container.firstChild) {
+      container.firstChild.classList.add('sel');
+      selectedHospital = container.firstChild.dataset?.name || selectedHospital;
+    }
   }
 
   document.addEventListener('DOMContentLoaded', ()=>{
@@ -245,6 +246,14 @@ select option {
     document.getElementById('clearBtn').addEventListener('click', ()=> location.reload());
     document.getElementById('goBook').addEventListener('click', gotoBooking);
     document.getElementById('refresh').addEventListener('click', onPredict);
+
+    // Preselect hospital from localStorage (if user came from booking or earlier)
+    const persistedHosp = localStorage.getItem('ak_booking_hospital');
+    if (persistedHosp) {
+      const card = Array.from(document.querySelectorAll('.hcard')).find(c => c.dataset.name === persistedHosp);
+      if (card) { card.click(); }
+      // remove after use optional — keeping for convenience
+    }
   });
 
   async function onPredict(){
@@ -262,8 +271,13 @@ select option {
     const problem = document.getElementById('problem').value;
     const pincode = document.getElementById('pincode').value || null;
 
+    // fallback: if no card clicked then use the first hospital in list or persisted
+    if (!selectedHospital) {
+      selectedHospital = HOSPITALS[0].id;
+    }
+
     const payload = { hospital: selectedHospital, hour, weekday, problem, pincode, want_booking: true };
-    const url = "/predict";
+    const url = "http://127.0.0.1:8000/predict";
 
     try {
       const res = await fetch(url, {
@@ -285,15 +299,17 @@ select option {
 
   function showResult(data){
     document.getElementById('resultCard').style.display='block';
-    document.getElementById('res_hospital').innerText = data.hospital;
-    document.getElementById('res_wait').innerText = data.wait_minutes + ' mins';
+    // ensure hospital shown is same as data (or fall back)
+    const hospitalName = data.hospital || selectedHospital || HOSPITALS[0].id;
+    document.getElementById('res_hospital').innerText = hospitalName;
+    document.getElementById('res_wait').innerText = (data.wait_minutes || 0) + ' mins';
     // crowd badge
     const badgeWrap = document.getElementById('res_crowd');
     badgeWrap.innerHTML = '';
     const badge = document.createElement('span');
     const cat = data.crowd_category || (data.crowd_score < 3.5 ? 'Low' : (data.crowd_score < 6.5 ? 'Moderate' : 'High'));
     badge.className = 'badge ' + (cat==='Low'?'low':(cat==='Moderate'?'moderate':'high'));
-    badge.innerText = `${cat} (${data.crowd_score})`;
+    badge.innerText = `${cat} (${data.crowd_score || 0})`;
     badgeWrap.appendChild(badge);
 
     // suggestions
@@ -310,26 +326,41 @@ select option {
 
     // slots
     const slotArea = document.getElementById('slotArea'); slotArea.innerHTML='';
-    if (data.recommended_slots && data.recommended_slots.length){
-      data.recommended_slots.forEach(s=>{
+    selectedSlot = null;
+    const slots = data.recommended_slots || [];
+    if (slots.length){
+      slots.forEach(s=>{
         const el = document.createElement('div'); el.className='slot'; el.innerText = s;
         el.addEventListener('click', ()=>{
           document.querySelectorAll('.slot').forEach(x=>x.classList.remove('sel'));
           el.classList.add('sel'); selectedSlot = s;
+          // show proceed button when a slot is chosen
+          document.getElementById('goBook').style.display = 'inline-block';
         });
         slotArea.appendChild(el);
       });
+      // hide goBook until a slot is selected
+      document.getElementById('goBook').style.display = 'none';
     } else {
       const el = document.createElement('div'); el.className='slot'; el.innerText = 'No slots available'; slotArea.appendChild(el);
+      document.getElementById('goBook').style.display = 'none';
     }
   }
 
   function gotoBooking(){
     if (!selectedSlot) return alert('Select a slot first');
-    // store in localStorage to pass to booking page
-    localStorage.setItem('ak_booking_hospital', document.getElementById('res_hospital').innerText || selectedHospital);
+
+    // prefer the result label (if showResult filled it), otherwise fallback to selectedHospital
+    const hospitalName = (document.getElementById('res_hospital') && document.getElementById('res_hospital').innerText) || selectedHospital || HOSPITALS[0].id;
+
+    // save to localStorage as backup
+    localStorage.setItem('ak_booking_hospital', hospitalName);
     localStorage.setItem('ak_booking_slot', selectedSlot);
-    window.location.href = '/static/booking.html';
+
+    // redirect with query params (encode them!)
+    const url = `booking.html?hospital=${encodeURIComponent(hospitalName)}&slot=${encodeURIComponent(selectedSlot)}`;
+    console.log('Redirecting to booking with:', url);
+    window.location.href = url;
   }
 </script>
 </body>
