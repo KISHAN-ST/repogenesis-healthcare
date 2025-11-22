@@ -7,6 +7,8 @@ import numpy as np
 import os
 from datetime import datetime, timedelta
 import random
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 app = FastAPI(title="Akatsuki — Hospital Traffic Predictor")
 
@@ -20,6 +22,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve frontend static files at /static and provide a simple UI entry at /ui
+# The `frontend` folder sits next to `backend`, so compute an absolute path
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
+
+if os.path.isdir(FRONTEND_DIR):
+    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static_frontend")
+
+
+@app.get("/ui")
+def ui():
+    # Serve the primary frontend file (index1.html) so users can open /ui
+    index_path = os.path.join(FRONTEND_DIR, "index1.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path, media_type="text/html")
+    return {"error": "frontend not found"}
 
 # ---------------------------------------------------------
 # MAPPINGS (must be ABOVE heuristic_predict)
