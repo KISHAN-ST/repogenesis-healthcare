@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Akatsuki — Hospital Traffic Predictor</title>
+
+<style>
+  body { font-family: Inter, Arial, sans-serif; background: #f3f6ff; color:#1f2937; margin:0; padding:24px; display:flex; align-items:flex-start; justify-content:center; }
+  .container { width:100%; max-width:920px; }
+  .card { background:#fff; border-radius:12px; padding:18px 22px; box-shadow:0 6px 22px rgba(16,24,40,0.06); margin-bottom:18px; }
+  h1{ margin:0 0 8px 0; font-size:20px }
+  label{ display:block; font-weight:600; margin-top:10px; }
+  select,input[type="text"],input[type="number"],input[type="time"]{
+    width:100%; padding:10px 12px; margin-top:6px; border-radius:8px; border:1px solid #e6e9ef;
+  }
+  button.primary{
+    background:#0ea5a4; color:#fff; border:none; padding:11px 14px;
+    border-radius:9px; cursor:pointer; font-weight:700; margin-top:12px; width:100%;
+  }
+  .result-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top:12px; }
+  .badge{ padding:8px 12px; border-radius:14px; display:inline-block; font-weight:700; }
+  .low{ background:#d1fae5; color:#065f46 }
+  .moderate{ background:#fef3c7; color:#92400e }
+  .high{ background:#fee2e2; color:#991b1b }
+  .small{ font-size:13px; color:#6b7280 }
+  .suggestions{ margin-top:12px }
+  .slot{ padding:8px 10px; border-radius:8px; border:1px solid #e6e9ef; display:inline-block; margin-right:8px; margin-top:8px; cursor:pointer; }
+  .slot.selected{ background:#0ea5a4; color:white; border-color:#0ea5a4; }
+  .flex{ display:flex; gap:10px; align-items:center; }
+</style>
+
+</head>
+
+<body>
+<div class="container">
+
+  <!-- Main Card -->
+  <div class="card">
+    <h1>Akatsuki — Hospital Traffic Predictor</h1>
+    <p class="small">Enter symptoms & preferred hospital. We'll estimate crowd level, waiting time, and suggest alternatives with booking slots.</p>
+
+    <label>Problem / Symptom</label>
+    <select id="problem">
+      <option value="general_checkup">General Checkup</option>
+      <option value="fever">Fever</option>
+      <option value="cough_cold">Cough / Cold</option>
+      <option value="stomach_pain">Stomach Pain</option>
+      <option value="fracture">Fracture</option>
+      <option value="chest_pain">Chest Pain</option>
+      <option value="accident">Accident</option>
+      <option value="pregnancy">Pregnancy</option>
+      <option value="child_illness">Child Illness</option>
+      <option value="others">Others</option>
+    </select>
+
+    <label>When do you want to visit?</label>
+    <select id="when">
+      <option value="now">Now</option>
+      <option value="in_1_hour">In 1 Hour</option>
+      <option value="today_evening">Today Evening</option>
+      <option value="tomorrow_morning">Tomorrow Morning</option>
+      <option value="pick_time">Pick a Time</option>
+    </select>
+
+    <div id="pick-time-row" style="display:none; margin-top:10px;">
+      <label>Choose Time</label>
+      <input id="picked_time" type="time" />
+    </div>
+
+    <label>Choose Hospital</label>
+    <select id="hospital">
+      <option>Manipal</option>
+      <option>Apollo</option>
+      <option>Fortis</option>
+      <option>Govt PHC</option>
+      <option>Aster Clinic</option>
+    </select>
+
+    <label>Use my current pincode? (optional)</label>
+    <div class="flex">
+      <button id="detect" style="padding:8px 10px; border-radius:8px; border:1px solid #e6e9ef; background:white; cursor:pointer;">Auto-detect</button>
+      <input id="pincode" type="text" placeholder="Enter pincode" style="flex:1;" />
+    </div>
+
+    <button class="primary" id="predictBtn">Predict hospital crowd</button>
+
+    <!-- RESULT SECTION (You were missing this!) -->
+    <div id="result" style="display:none;" class="result-section">
+      <div class="result-grid">
+
+        <!-- LEFT: Prediction Details -->
+        <div class="card" id="leftCard">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div class="small">Hospital</div>
+              <h3 id="res_hospital">-</h3>
+
+              <div class="small">Crowd Level</div>
+              <div id="res_crowd" style="margin-top:8px;"></div>
+            </div>
+
+            <div style="text-align:right;">
+              <div class="small">Estimated Wait</div>
+              <h2 id="res_wait">-</h2>
+              <div class="small" id="res_inflow">-</div>
+            </div>
+          </div>
+
+          <div class="suggestions">
+            <div class="small">Alternatives</div>
+            <ul id="res_suggestions"></ul>
+          </div>
+        </div>
+
+        <!-- RIGHT: Booking Section -->
+        <div class="card" id="rightCard">
+          <div class="small">Book a quick appointment to skip queue</div>
+          <div id="slotArea" style="margin-top:10px;"></div>
+          <button id="bookNow" class="primary" style="margin-top:12px;">Confirm Booking & Pay</button>
+          <div id="bookResult" style="margin-top:12px;"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,298 @@
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional, List, Dict, Any
+import joblib
+import numpy as np
+import os
+from datetime import datetime, timedelta
+import random
+
+# -------------------------------------------------------------------
+#  FASTAPI APP
+# -------------------------------------------------------------------
+app = FastAPI(title="Akatsuki — Hospital Traffic Predictor")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:5500",
+        "http://localhost:5500",
+        "*"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# -------------------------------------------------------------------
+#  LOAD MODELS (optional)
+# -------------------------------------------------------------------
+MODEL_CROWD_PATH = "model_crowd.joblib"
+MODEL_WAIT_PATH = "model_wait.joblib"
+
+model_crowd = joblib.load(MODEL_CROWD_PATH) if os.path.exists(MODEL_CROWD_PATH) else None
+model_wait = joblib.load(MODEL_WAIT_PATH) if os.path.exists(MODEL_WAIT_PATH) else None
+
+# -------------------------------------------------------------------
+#  SYMPTOM → DEPARTMENT LOGIC
+# -------------------------------------------------------------------
+SYMPTOM_DEPT = {
+    "fever": "General Medicine",
+    "cough_cold": "General Medicine",
+    "stomach_pain": "Gastroenterology",
+    "fracture": "Orthopedics",
+    "chest_pain": "Cardiology",
+    "accident": "Trauma / Emergency",
+    "pregnancy": "Gynecology",
+    "child_illness": "Pediatrics",
+    "general_checkup": "General Medicine",
+    "others": "General Medicine"
+}
+
+# -------------------------------------------------------------------
+#  PROBLEM SEVERITY (used for prediction)
+# -------------------------------------------------------------------
+PROBLEM_SEVERITY = {
+    "general_checkup": 0,
+    "fever": 1,
+    "cough_cold": 1,
+    "others": 1,
+    "stomach_pain": 2,
+    "pregnancy": 2,
+    "child_illness": 2,
+    "fracture": 3,
+    "chest_pain": 4,
+    "accident": 4,
+}
+
+# -------------------------------------------------------------------
+#  HOSPITAL PROFILES (capacity + size)
+# -------------------------------------------------------------------
+HOSPITAL_PROFILES = {
+    "Manipal": {"size": 3, "base_capacity": 100, "pincode": "560076"},
+    "Apollo": {"size": 3, "base_capacity": 130, "pincode": "560008"},
+    "Fortis": {"size": 3, "base_capacity": 110, "pincode": "560095"},
+    "Govt PHC": {"size": 1, "base_capacity": 45, "pincode": "560050"},
+    "Aster Clinic": {"size": 1, "base_capacity": 30, "pincode": "560034"},
+}
+
+# -------------------------------------------------------------------
+#  UTILS
+# -------------------------------------------------------------------
+def distance_from_pincode(pincode1: str, pincode2: str) -> int:
+    """Mock distance using pincode numeric difference"""
+    if not pincode1 or not pincode2:
+        return 3  # default distance
+    try:
+        return abs(int(pincode1) - int(pincode2)) // 5
+    except:
+        return 3
+
+
+def score_to_category(score: float) -> str:
+    if score < 3.5: return "Low"
+    if score < 6.5: return "Moderate"
+    return "High"
+
+
+def available_slots_for_hospital(after_minutes=5, count=6):
+    """Generate a list of good appointment slots"""
+    now = datetime.now() + timedelta(minutes=after_minutes)
+    slots = []
+    for i in range(count):
+        slot = (now + timedelta(minutes=20 * i)).strftime("%Y-%m-%d %H:%M")
+        slots.append(slot)
+    return slots
+
+
+# -------------------------------------------------------------------
+#  HEURISTIC PREDICTION ENGINE (fallback)
+# -------------------------------------------------------------------
+def heuristic_predict(hospital: str, hour: int, weekday: int, problem: str, pincode: Optional[str] = None):
+
+    profile = HOSPITAL_PROFILES.get(hospital, {"size": 2, "base_capacity": 60})
+
+    base_capacity = profile["base_capacity"]
+    severity = PROBLEM_SEVERITY.get(problem, 1)
+
+    # Peak time logic
+    if 8 <= hour <= 12:
+        t_mult = 1.5
+    elif 17 <= hour <= 20:
+        t_mult = 1.6
+    else:
+        t_mult = 1.0
+
+    # Weekend decrease
+    w_mult = 0.85 if weekday >= 5 else 1.0
+
+    # Random inflow
+    inflow = int(base_capacity * 0.25 * t_mult * w_mult * (0.7 + random.random()))
+    emergency = int(inflow * (0.08 + severity * 0.03))
+
+    # Load ratio
+    load_ratio = inflow / base_capacity
+
+    # Crowd score
+    crowd_score = round(min(10, load_ratio * 7 + severity * 0.7), 2)
+
+    # Wait time
+    wait_minutes = int(12 + load_ratio * 55 + severity * 10 + emergency * 2)
+
+    # Alternative hospitals
+    suggestions = []
+    for h, prof in HOSPITAL_PROFILES.items():
+        if h == hospital:
+            continue
+        alt_capacity = prof["base_capacity"]
+        alt_inflow = int(alt_capacity * 0.22 * (0.7 + random.random()))
+        alt_wait = int(12 + (alt_inflow/alt_capacity) * 55)
+
+        # rank using wait + distance
+        distance = distance_from_pincode(pincode, prof.get("pincode"))
+        rank_value = alt_wait + distance * 3
+
+        suggestions.append({
+            "hospital": h,
+            "est_wait": alt_wait,
+            "distance_score": distance,
+            "rank_value": rank_value
+        })
+
+    # sort by rank
+    suggestions = sorted(suggestions, key=lambda x: x["rank_value"])[:3]
+
+    return {
+        "crowd_score": crowd_score,
+        "wait_minutes": wait_minutes,
+        "inflow_est": inflow,
+        "emergency_est": emergency,
+        "suggestions": suggestions,
+    }
+
+
+# -------------------------------------------------------------------
+#  REQUEST/RESPONSE MODELS
+# -------------------------------------------------------------------
+class PredictRequest(BaseModel):
+    hospital: str
+    hour: Optional[int] = None
+    weekday: Optional[int] = None
+    problem: Optional[str] = "general_checkup"
+    pincode: Optional[str] = None
+    want_booking: Optional[bool] = False
+
+
+class PredictResponse(BaseModel):
+    hospital: str
+    department: str
+    crowd_score: float
+    crowd_category: str
+    wait_minutes: int
+    inflow_est: int
+    emergency_est: int
+    suggestions: List[Dict[str, Any]]
+    recommended_slots: Optional[List[str]] = None
+
+
+class BookRequest(BaseModel):
+    hospital: str
+    slot: str
+    name: str
+    phone: str
+    fee_paid: float
+
+
+class BookResponse(BaseModel):
+    booking_id: str
+    hospital: str
+    slot: str
+    token: str
+    estimated_wait: int
+
+
+# -------------------------------------------------------------------
+#  API ENDPOINTS
+# -------------------------------------------------------------------
+
+@app.get("/")
+def home():
+    return {"status": "ok", "message": "Akatsuki API running"}
+
+
+@app.post("/predict", response_model=PredictResponse)
+def predict(req: PredictRequest):
+
+    hour = req.hour or datetime.now().hour
+    weekday = req.weekday or datetime.now().weekday()
+    problem = req.problem
+    hospital = req.hospital
+
+    department = SYMPTOM_DEPT.get(problem, "General Medicine")
+
+    # ML MODELS (if available)
+    try:
+        if model_crowd and model_wait:
+
+            X = np.array([[hour, weekday, PROBLEM_SEVERITY.get(problem,1), 1]])
+
+            try:
+                crowd = float(model_crowd.predict(X)[0])
+                wait = int(model_wait.predict(X)[0])
+            except:
+                raise ValueError("Model shape mismatch — using heuristic")
+
+            suggestions = heuristic_predict(hospital, hour, weekday, problem, req.pincode)["suggestions"]
+            slots = available_slots_for_hospital()
+
+            return PredictResponse(
+                hospital=hospital,
+                department=department,
+                crowd_score=round(crowd, 2),
+                crowd_category=score_to_category(crowd),
+                wait_minutes=wait,
+                inflow_est=max(8, wait//4),
+                emergency_est=max(1, wait//20),
+                suggestions=suggestions,
+                recommended_slots=slots
+            )
+
+    except:
+        pass  # fallback below
+
+    # HEURISTIC FALLBACK (always works)
+    fallback = heuristic_predict(hospital, hour, weekday, problem, req.pincode)
+    slots = available_slots_for_hospital()
+
+    return PredictResponse(
+        hospital=hospital,
+        department=department,
+        crowd_score=fallback["crowd_score"],
+        crowd_category=score_to_category(fallback["crowd_score"]),
+        wait_minutes=fallback["wait_minutes"],
+        inflow_est=fallback["inflow_est"],
+        emergency_est=fallback["emergency_est"],
+        suggestions=fallback["suggestions"],
+        recommended_slots=slots
+    )
+
+
+@app.post("/book", response_model=BookResponse)
+def book(req: BookRequest):
+    """Mock booking system"""
+    booking_id = "BK" + datetime.now().strftime("%Y%m%d%H%M%S") + str(random.randint(10,99))
+    token = str(random.randint(1000, 9999))
+
+    # Estimate wait using simple logic
+    fallback = heuristic_predict(req.hospital, datetime.now().hour, datetime.now().weekday(), "general_checkup")
+    est_wait = max(5, int(fallback["wait_minutes"] * 0.7))
+
+    return BookResponse(
+        booking_id=booking_id,
+        hospital=req.hospital,
+        slot=req.slot,
+        token=token,
+        estimated_wait=est_wait
+    )
