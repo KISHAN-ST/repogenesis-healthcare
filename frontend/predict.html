@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Akatsuki — Predict</title>
+<style>
+  :root{
+    --glass: rgba(255,255,255,0.12);
+    --card-border: rgba(255,255,255,0.08);
+    --muted: rgba(255,255,255,0.85);
+  }
+  html,body{height:100%;margin:0;font-family:Inter, Arial, sans-serif}
+  body{
+    background: linear-gradient(135deg,#061233 0%, #5b21b6 55%, #7c3aed 100%);
+    color:#e6eefc;
+    display:flex;align-items:center;justify-content:center;padding:28px;
+  }
+  .bg-circle{ position:absolute;border-radius:50%;filter:blur(70px);opacity:0.25; }
+  .c1{width:420px;height:420px;left:-80px;top:-60px;background:#7c3aed33}
+  .c2{width:320px;height:320px;right:-60px;bottom:-80px;background:#0ea5a455}
+
+  .wrap{ width:100%; max-width:1100px; display:grid; grid-template-columns: 1fr 420px; gap:28px; z-index:1; }
+
+  /* main card */
+  .card{
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding:20px;
+    box-shadow: 0 10px 30px rgba(2,6,23,0.5);
+    backdrop-filter: blur(10px);
+  }
+
+  /* Force dropdown / option readable on dark background */
+  select, option {
+    color: #000 !important;
+    background-color: #fff !important;
+  }
+
+  .brand {
+    display:flex;align-items:center;gap:12px;margin-bottom:12px;
+  }
+  .logo {
+    width:56px;height:56px;border-radius:12px;background:#0f172a;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;color:white;
+    box-shadow:0 6px 18px rgba(2,6,23,0.6)
+  }
+  h1{margin:0;font-size:20px}
+  p.lead{margin:6px 0 14px 0;color:rgba(230,238,252,0.9);font-size:13px}
+
+  label{display:block;font-weight:700;margin-top:12px;font-size:13px}
+  .row{display:flex;gap:12px;align-items:center}
+  select,input[type="time"],input[type="text"]{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:var(--muted)}
+  button.btn{display:inline-block;padding:12px 14px;border-radius:10px;border:none;font-weight:800;cursor:pointer}
+  .btn-primary{background:#1f2937;color:white;box-shadow:0 6px 18px rgba(2,6,23,0.5)}
+  .btn-light{background:rgba(255,255,255,0.09);color:white;border:1px solid rgba(255,255,255,0.06)}
+
+  /* hospital list */
+  .hlist{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+  .hcard{width:150px;background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));border-radius:10px;padding:8px;border:1px solid rgba(255,255,255,0.04);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;transition:transform .15s, box-shadow .15s}
+  .hcard img{width:120px;height:80px;object-fit:cover;border-radius:6px}
+  .hcard h4{margin:0;font-size:13px;color:var(--muted)}
+  .hcard.sel{transform:translateY(-6px);box-shadow:0 18px 40px rgba(2,6,23,0.6);border-color:rgba(255,255,255,0.12)}
+
+  /* right column (result/booking quick) */
+  .right {
+    display:flex;flex-direction:column;gap:16px;
+    position:relative;
+  }
+  .result-block{ padding:14px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.015)); border:1px solid rgba(255,255,255,0.04)}
+  .stat{display:flex;justify-content:space-between;align-items:center}
+  .badge{padding:8px 12px;border-radius:999px;font-weight:800}
+  .low{background:rgba(34,197,94,0.12); color:#bbf7d0}
+  .moderate{background:rgba(250,204,21,0.12); color:#fef3c7}
+  .high{background:rgba(239,68,68,0.12); color:#fecaca}
+
+  .slots{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+  .slot{padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:rgba(255,255,255,0.02);cursor:pointer}
+  .slot.sel{background:#0f172a;color:white;border-color:#0f172a;transform:translateY(-3px)}
+
+  .suggestions ul{margin:6px 0 0 18px;color:rgba(230,238,252,0.9)}
+  .note{font-size:12px;color:rgba(230,238,252,0.7);margin-top:10px}
+
+  /* responsive */
+  @media (max-width:980px){
+    .wrap{grid-template-columns:1fr; padding-bottom:40px}
+  }
+</style>
+</head>
+<body>
+  <div class="bg-circle c1"></div>
+  <div class="bg-circle c2"></div>
+
+  <div class="wrap">
+    <!-- LEFT: form -->
+    <div class="card">
+      <div class="brand">
+        <div class="logo">A</div>
+        <div>
+          <h1>Akatsuki — Predict hospital crowd</h1>
+          <p class="lead">Pick symptom, desired time and hospital. We estimate crowd, wait time and give quick booking slots.</p>
+        </div>
+      </div>
+
+      <label>Problem / Symptom</label>
+      <select id="problem">
+        <option value="general_checkup">General Checkup</option>
+        <option value="fever">Fever</option>
+        <option value="cough_cold">Cough / Cold</option>
+        <option value="stomach_pain">Stomach Pain</option>
+        <option value="fracture">Fracture</option>
+        <option value="chest_pain">Chest Pain</option>
+        <option value="accident">Accident</option>
+        <option value="pregnancy">Pregnancy</option>
+        <option value="child_illness">Child Illness</option>
+        <option value="others">Others</option>
+      </select>
+
+      <label>When do you want to visit?</label>
+      <div class="row">
+        <select id="when" style="flex:1">
+          <option value="now">Now</option>
+          <option value="in_1_hour">In 1 hour</option>
+          <option value="today_evening">Today evening</option>
+          <option value="tomorrow_morning">Tomorrow morning</option>
+          <option value="pick_time">Pick exact time</option>
+        </select>
+        <input id="picked_time" type="time" style="width:150px;display:none" />
+      </div>
+
+      <label style="margin-top:14px">Choose Hospital</label>
+      <div class="hlist" id="hospitalList">
+        <!-- cards injected by JS -->
+      </div>
+
+      <label>Pin code (optional)</label>
+      <div class="row">
+        <input id="pincode" type="text" placeholder="Enter pincode" />
+        <button id="detect" class="btn btn-light" style="white-space:nowrap">Auto-detect</button>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button id="predictBtn" class="btn btn-primary" style="flex:1">Predict crowd</button>
+        <button id="clearBtn" class="btn btn-light" style="width:130px">Clear</button>
+      </div>
+
+      <div class="note">Tip: Pick a hospital card (logo) to select the hospital. Then press Predict.</div>
+    </div>
+
+    <!-- RIGHT: results & quick booking -->
+    <div class="right">
+      <div class="result-block card" id="resultCard" style="display:none">
+        <div class="stat">
+          <div>
+            <div style="font-size:12px;color:rgba(230,238,252,0.7)">Hospital</div>
+            <div id="res_hospital" style="font-weight:800;font-size:16px">-</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:12px;color:rgba(230,238,252,0.7)">Estimated wait</div>
+            <div id="res_wait" style="font-weight:800;font-size:18px">-</div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px" id="crowdWrap">
+          <div style="font-size:12px;color:rgba(230,238,252,0.7)">Crowd level</div>
+          <div id="res_crowd" style="margin-top:8px"></div>
+        </div>
+
+        <div style="margin-top:12px" class="suggestions">
+          <div style="font-size:12px;color:rgba(230,238,252,0.7)">Nearby alternatives</div>
+          <ul id="res_suggestions"></ul>
+        </div>
+
+        <div style="margin-top:12px">
+          <div style="font-size:12px;color:rgba(230,238,252,0.7)">Recommended slots</div>
+          <div class="slots" id="slotArea"></div>
+        </div>
+
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <button id="goBook" class="btn btn-primary" style="flex:1">Proceed to Booking</button>
+          <button id="refresh" class="btn btn-light">Refresh</button>
+        </div>
+      </div>
+
+      <div class="card" id="placeholderBlock" style="text-align:center">
+        <div style="font-weight:800">Quick demo</div>
+        <div style="margin-top:8px;color:rgba(230,238,252,0.8)">Predict and then book a slot to skip the queue. All calls hit your local FastAPI backend.</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // map hospital names to images (use full local paths that exist in your dev environment)
+  const HOSPITALS = [
+    { id: "Manipal", img: "h1.jpg", subtitle: "Manipal Hospital" },
+    { id: "Apollo", img: "h2.jpg", subtitle: "Apollo Hospital" },
+    { id: "Fortis", img: "h3.jpg", subtitle: "Fortis" },
+    { id: "Govt PHC", img: "h4.jpg", subtitle: "Govt PHC" },
+    { id: "Aster Clinic", img: "h5.jpg", subtitle: "Aster Clinic" }
+  ];
+
+  let selectedHospital = '';
+  let selectedSlot = null;
+
+  function buildHospitalCards(){
+    const container = document.getElementById('hospitalList');
+    container.innerHTML = '';
+    HOSPITALS.forEach(h=>{
+      const card = document.createElement('div'); card.className='hcard'; card.dataset.name=h.id;
+      const img = document.createElement('img'); img.src=h.img; img.alt=h.id;
+      const title = document.createElement('h4'); title.innerText = h.subtitle;
+      card.appendChild(img); card.appendChild(title);
+      card.addEventListener('click', ()=> {
+        document.querySelectorAll('.hcard').forEach(x=>x.classList.remove('sel'));
+        card.classList.add('sel');
+        selectedHospital = h.id;
+      });
+      container.appendChild(card);
+    });
+    // pre-select first if exists (defensive)
+    if (container.firstChild) {
+      container.firstChild.classList.add('sel');
+      selectedHospital = container.firstChild.dataset?.name || selectedHospital;
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', ()=>{
+    buildHospitalCards();
+
+    const whenEl = document.getElementById('when');
+    const pickedTime = document.getElementById('picked_time');
+    whenEl.addEventListener('change', ()=> {
+      pickedTime.style.display = whenEl.value === 'pick_time' ? 'inline-block' : 'none';
+    });
+
+    document.getElementById('detect').addEventListener('click', ()=> {
+      if (!navigator.geolocation) return alert('Geolocation not supported');
+      navigator.geolocation.getCurrentPosition(pos => {
+        const p = "5600" + String(Math.floor(Math.random()*90)+10);
+        document.getElementById('pincode').value = p;
+        alert('Pincode detected (demo): ' + p);
+      }, ()=> alert('Location denied'));
+    });
+
+    document.getElementById('predictBtn').addEventListener('click', onPredict);
+    document.getElementById('clearBtn').addEventListener('click', ()=> location.reload());
+    document.getElementById('goBook').addEventListener('click', gotoBooking);
+    document.getElementById('refresh').addEventListener('click', onPredict);
+
+    // Preselect hospital from localStorage (if user came from booking or earlier)
+    const persistedHosp = localStorage.getItem('ak_booking_hospital');
+    if (persistedHosp) {
+      const card = Array.from(document.querySelectorAll('.hcard')).find(c => c.dataset.name === persistedHosp);
+      if (card) { card.click(); }
+      // remove after use optional — keeping for convenience
+    }
+  });
+
+  async function onPredict(){
+    const when = document.getElementById('when').value;
+    let hour;
+    if (when === 'now') hour = new Date().getHours();
+    else if (when === 'in_1_hour') hour = new Date(Date.now()+3600000).getHours();
+    else if (when === 'today_evening') hour = 18;
+    else if (when === 'tomorrow_morning') hour = 9;
+    else {
+      const t = document.getElementById('picked_time').value || '09:00';
+      hour = parseInt(t.split(':')[0]);
+    }
+    const weekday = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
+    const problem = document.getElementById('problem').value;
+    const pincode = document.getElementById('pincode').value || null;
+
+    // fallback: if no card clicked then use the first hospital in list or persisted
+    if (!selectedHospital) {
+      selectedHospital = HOSPITALS[0].id;
+    }
+
+    const payload = { hospital: selectedHospital, hour, weekday, problem, pincode, want_booking: true };
+    const url = "http://127.0.0.1:8000/predict";
+
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        return alert('Server error: ' + txt);
+      }
+      const data = await res.json();
+      showResult(data);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to connect to backend. Start FastAPI at http://127.0.0.1:8000');
+    }
+  }
+
+  function showResult(data){
+    document.getElementById('resultCard').style.display='block';
+    // ensure hospital shown is same as data (or fall back)
+    const hospitalName = data.hospital || selectedHospital || HOSPITALS[0].id;
+    document.getElementById('res_hospital').innerText = hospitalName;
+    document.getElementById('res_wait').innerText = (data.wait_minutes || 0) + ' mins';
+    // crowd badge
+    const badgeWrap = document.getElementById('res_crowd');
+    badgeWrap.innerHTML = '';
+    const badge = document.createElement('span');
+    const cat = data.crowd_category || (data.crowd_score < 3.5 ? 'Low' : (data.crowd_score < 6.5 ? 'Moderate' : 'High'));
+    badge.className = 'badge ' + (cat==='Low'?'low':(cat==='Moderate'?'moderate':'high'));
+    badge.innerText = `${cat} (${data.crowd_score || 0})`;
+    badgeWrap.appendChild(badge);
+
+    // suggestions
+    const sug = document.getElementById('res_suggestions'); sug.innerHTML='';
+    if (data.suggestions && data.suggestions.length){
+      data.suggestions.forEach(s=>{
+        const li = document.createElement('li');
+        li.innerText = `${s.hospital} — est wait ${s.est_wait} mins`;
+        sug.appendChild(li);
+      });
+    } else {
+      const li = document.createElement('li'); li.innerText='No nearby alternatives found'; sug.appendChild(li);
+    }
+
+    // slots
+    const slotArea = document.getElementById('slotArea'); slotArea.innerHTML='';
+    selectedSlot = null;
+    const slots = data.recommended_slots || [];
+    if (slots.length){
+      slots.forEach(s=>{
+        const el = document.createElement('div'); el.className='slot'; el.innerText = s;
+        el.addEventListener('click', ()=>{
+          document.querySelectorAll('.slot').forEach(x=>x.classList.remove('sel'));
+          el.classList.add('sel'); selectedSlot = s;
+          // show proceed button when a slot is chosen
+          document.getElementById('goBook').style.display = 'inline-block';
+        });
+        slotArea.appendChild(el);
+      });
+      // hide goBook until a slot is selected
+      document.getElementById('goBook').style.display = 'none';
+    } else {
+      const el = document.createElement('div'); el.className='slot'; el.innerText = 'No slots available'; slotArea.appendChild(el);
+      document.getElementById('goBook').style.display = 'none';
+    }
+  }
+
+  function gotoBooking(){
+    if (!selectedSlot) return alert('Select a slot first');
+
+    // prefer the result label (if showResult filled it), otherwise fallback to selectedHospital
+    const hospitalName = (document.getElementById('res_hospital') && document.getElementById('res_hospital').innerText) || selectedHospital || HOSPITALS[0].id;
+
+    // save to localStorage as backup
+    localStorage.setItem('ak_booking_hospital', hospitalName);
+    localStorage.setItem('ak_booking_slot', selectedSlot);
+
+    // redirect with query params (encode them!)
+    const url = `booking.html?hospital=${encodeURIComponent(hospitalName)}&slot=${encodeURIComponent(selectedSlot)}`;
+    console.log('Redirecting to booking with:', url);
+    window.location.href = url;
+  }
+</script>
+</body>
+</html>
