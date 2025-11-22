@@ -1,4 +1,3 @@
-# app.py
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,34 +10,20 @@ import random
 
 app = FastAPI(title="Akatsuki — Hospital Traffic Predictor")
 
+# ---------------------------------------------------------
+# CORS (Frontend → Backend communication)
+# ---------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # demo mode
+    allow_origins=["*"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Try to load models if available (two models: crowd_score and wait_minutes)
-MODEL_CROWD_PATH = "model_crowd.joblib"     # optional
-MODEL_WAIT_PATH = "model_wait.joblib"       # optional
-
-model_crowd = None
-model_wait = None
-if os.path.exists(MODEL_CROWD_PATH):
-    try:
-        model_crowd = joblib.load(MODEL_CROWD_PATH)
-    except Exception as e:
-        print("Failed to load crowd model:", e)
-if os.path.exists(MODEL_WAIT_PATH):
-    try:
-        model_wait = joblib.load(MODEL_WAIT_PATH)
-    except Exception as e:
-        print("Failed to load wait model:", e)
-
-
-# --- Helper mappings & fallback heuristics ---------------------------------
-# Map problem types to severity (higher -> more wait)
+# ---------------------------------------------------------
+# MAPPINGS (must be ABOVE heuristic_predict)
+# ---------------------------------------------------------
 PROBLEM_SEVERITY = {
     "fever": 1,
     "cough_cold": 1,
@@ -53,7 +38,6 @@ PROBLEM_SEVERITY = {
 }
 
 HOSPITAL_PROFILES = {
-    # Add the hospitals you simulated / want to demo
     "Manipal": {"size": 3, "base_capacity": 100},
     "Apollo": {"size": 3, "base_capacity": 120},
     "Fortis": {"size": 3, "base_capacity": 110},
@@ -61,70 +45,113 @@ HOSPITAL_PROFILES = {
     "Aster Clinic": {"size": 1, "base_capacity": 30}
 }
 
-def safe_int(x, default=0):
-    try:
-        return int(x)
-    except:
-        return default
+# ---------------------------------------------------------
+# Try loading trained models (optional)
+# ---------------------------------------------------------
+MODEL_CROWD_PATH = "model_crowd.joblib"
+MODEL_WAIT_PATH = "model_wait.joblib"
 
-def heuristic_predict(hospital: str, hour: int, weekday: int, problem: str, pincode: Optional[str]=None) -> Dict[str, Any]:
-    """Simple fallback heuristic to produce crowd_score (0-10) and wait_minutes"""
+model_crowd = None
+model_wait = None
+
+if os.path.exists(MODEL_CROWD_PATH):
+    try:
+        model_crowd = joblib.load(MODEL_CROWD_PATH)
+        print("Crowd model loaded.")
+    except Exception as e:
+        print("Failed to load crowd model:", e)
+
+if os.path.exists(MODEL_WAIT_PATH):
+    try:
+        model_wait = joblib.load(MODEL_WAIT_PATH)
+        print("Wait model loaded.")
+    except Exception as e:
+        print("Failed to load wait model:", e)
+
+# ---------------------------------------------------------
+# NEW Improved Heuristic Model  (MAIN FIX)
+# ---------------------------------------------------------
+def heuristic_predict(
+    hospital: str,
+    hour: int,
+    weekday: int,
+    problem: str,
+    pincode: Optional[str] = None
+) -> Dict[str, Any]:
+
     hour = int(hour) % 24
     weekday = int(weekday) % 7
+
     severity = PROBLEM_SEVERITY.get(problem, 1)
-    profile = HOSPITAL_PROFILES.get(hospital, {"size":2,"base_capacity":60})
+    profile = HOSPITAL_PROFILES.get(hospital, {"size": 2, "base_capacity": 60})
     base_capacity = profile["base_capacity"]
 
-    # time multiplier (peak morning and evening)
-    if 8 <= hour <= 11:
-        t_mult = 1.4
-    elif 17 <= hour <= 20:
+    # More realistic time multipliers
+    if 7 <= hour <= 10:
         t_mult = 1.6
+    elif 17 <= hour <= 20:
+        t_mult = 1.8
+    elif 11 <= hour <= 16:
+        t_mult = 1.2
     else:
-        t_mult = 1.0
+        t_mult = 0.9
 
-    # weekday effect: weekends slightly lower for many hospitals
-    if weekday >= 5:
-        w_mult = 0.8
-    else:
-        w_mult = 1.0
+    # Weekends slightly lower
+    w_mult = 0.85 if weekday >= 5 else 1.0
 
-    # random rough "current inflow" simulation
-    inflow = max(5, int(base_capacity * 0.2 * t_mult * w_mult * (0.8 + random.random()*0.8)))
-    emergency = max(0, int(inflow * 0.08 * (1 + severity*0.2)))
+    # Simulated inflow
+    inflow = max(5, int(base_capacity * (0.3 + random.random() * 0.6) * t_mult * w_mult))
 
-    # crowd score roughly proportional to inflow / capacity + severity
-    load_ratio = inflow / base_capacity
-    crowd_score = min(10.0, (load_ratio * 6.0 + severity * 0.8) )
-    # waiting time hacked formula
-    wait_minutes = int(10 + (load_ratio * 60) + severity * 8 + emergency * 3)
+    # Emergency based on severity
+    emergency = max(
+        1,
+        int(inflow * (0.08 + 0.02 * severity) * (0.8 + random.random() * 0.8))
+    )
 
-    # suggestions: pick alternatives with lower simulated load
+    load_ratio = inflow / max(1, base_capacity)
+
+    crowd_score = min(
+        10.0,
+        (load_ratio * 8) + (severity * 1.6) + ((emergency / inflow) * 4)
+    )
+    crowd_score = round(crowd_score, 2)
+
+    wait_minutes = int(
+        8 + (load_ratio * 75) + (severity * 10) + (emergency * 3)
+    )
+
+    # alternative hospital suggestions
     suggestions = []
     for hname, prof in HOSPITAL_PROFILES.items():
         if hname == hospital:
             continue
-        other_capacity = prof["base_capacity"]
-        other_inflow = max(5, int(other_capacity * 0.18 * (0.9 + random.random()*0.6)))
-        if other_inflow / other_capacity < load_ratio:
-            suggestions.append({"hospital": hname, "est_wait": int(10 + (other_inflow/other_capacity)*60)})
+        cap = prof["base_capacity"]
+        infl = max(5, int(cap * (0.2 + random.random() * 0.5)))
+        ratio = infl / max(1, cap)
+        est_wait = int(8 + ratio * 75 + 5)
+        suggestions.append({"hospital": hname, "est_wait": est_wait})
 
     suggestions = sorted(suggestions, key=lambda x: x["est_wait"])[:3]
 
-    return {"crowd_score": round(crowd_score,2),
-            "wait_minutes": int(wait_minutes),
-            "inflow_est": inflow,
-            "emergency_est": emergency,
-            "suggestions": suggestions}
+    return {
+        "crowd_score": crowd_score,
+        "wait_minutes": wait_minutes,
+        "inflow_est": inflow,
+        "emergency_est": emergency,
+        "suggestions": suggestions
+    }
 
-# --- Request / Response models ---------------------------------------------
+# ---------------------------------------------------------
+# Response Models
+# ---------------------------------------------------------
 class PredictRequest(BaseModel):
     hospital: str
-    hour: Optional[int] = None   # if missing, backend uses current hour
-    weekday: Optional[int] = None  # 0=Mon
+    hour: Optional[int] = None
+    weekday: Optional[int] = None
     problem: Optional[str] = "general_checkup"
     pincode: Optional[str] = None
     want_booking: Optional[bool] = False
+
 
 class PredictResponse(BaseModel):
     hospital: str
@@ -136,12 +163,14 @@ class PredictResponse(BaseModel):
     suggestions: List[Dict[str, Any]]
     recommended_slots: Optional[List[str]] = None
 
+
 class BookRequest(BaseModel):
     hospital: str
     slot: str
     name: str
     phone: str
     fee_paid: float
+
 
 class BookResponse(BaseModel):
     booking_id: str
@@ -151,103 +180,70 @@ class BookResponse(BaseModel):
     estimated_wait: int
 
 
-# --- Utility functions ----------------------------------------------------
+# ---------------------------------------------------------
+# Utils
+# ---------------------------------------------------------
 def score_to_category(score: float) -> str:
-    if score < 3.5: return "Low"
-    if score < 6.5: return "Moderate"
+    if score < 3.5:
+        return "Low"
+    if score < 6.5:
+        return "Moderate"
     return "High"
 
-def available_slots_for_hospital(hospital: str, after_minutes: int = 0, count: int = 6):
-    """Generate some demo slots (strings)"""
+
+def available_slots_for_hospital(hospital: str, after_minutes=0, count=6):
     now = datetime.now() + timedelta(minutes=after_minutes)
     slots = []
     for i in range(count):
-        s = (now + timedelta(minutes=30*i)).strftime("%Y-%m-%d %H:%M")
+        s = (now + timedelta(minutes=30 * i)).strftime("%Y-%m-%d %H:%M")
         slots.append(s)
     return slots
 
-# --- API Endpoints --------------------------------------------------------
-@app.get("/", tags=["health"])
+
+# ---------------------------------------------------------
+# API ENDPOINTS
+# ---------------------------------------------------------
+
+@app.get("/")
 def home():
-    return {"status": "ok", "message": "Akatsuki Hospital Traffic Predictor API running"}
+    return {"status": "ok", "message": "Akatsuki API running"}
 
-@app.post("/predict", response_model=PredictResponse, tags=["predict"])
+
+@app.post("/predict", response_model=PredictResponse)
 def predict(req: PredictRequest):
-    # fill defaults
-    cur = datetime.now()
-    hour = req.hour if req.hour is not None else cur.hour
-    weekday = req.weekday if req.weekday is not None else cur.weekday()
+
+    hour = req.hour if req.hour is not None else datetime.now().hour
+    weekday = req.weekday if req.weekday is not None else datetime.now().weekday()
+
+    hospital = req.hospital
     problem = req.problem or "general_checkup"
-    hospital = req.hospital or list(HOSPITAL_PROFILES.keys())[0]
 
-    # Build feature vector (same order your model expects)
-    features = [hour, weekday, PROBLEM_SEVERITY.get(problem,1)]
-    # If your model expects more features, extend here.
+    # Always use heuristic (ML is optional)
+    fallback = heuristic_predict(hospital, hour, weekday, problem, req.pincode)
 
-    # If models exist, use them
-    try:
-        if model_crowd is not None and model_wait is not None:
-            X = np.array([ [hour, weekday, PROBLEM_SEVERITY.get(problem,1), 1] ])  # adjust shape to your trained features
-            # Protect: if model expects different n_features, fallback to heuristic
-            try:
-                crowd = float(model_crowd.predict(X)[0])
-                wait = int(model_wait.predict(X)[0])
-            except Exception as e:
-                # fallback
-                fallback = heuristic_predict(hospital, hour, weekday, problem, req.pincode)
-                crowd = fallback["crowd_score"]
-                wait = fallback["wait_minutes"]
-                suggestions = fallback["suggestions"]
-                recommended = available_slots_for_hospital(hospital, after_minutes=10, count=4)
-                return PredictResponse(
-                    hospital=hospital,
-                    crowd_score=crowd,
-                    crowd_category=score_to_category(crowd),
-                    wait_minutes=wait,
-                    inflow_est=fallback["inflow_est"],
-                    emergency_est=fallback["emergency_est"],
-                    suggestions=suggestions,
-                    recommended_slots=recommended
-                )
-            # if models worked
-            suggestions = heuristic_predict(hospital, hour, weekday, problem, req.pincode)["suggestions"]
-            recommended = available_slots_for_hospital(hospital, after_minutes=10, count=4)
-            return PredictResponse(
-                hospital=hospital,
-                crowd_score=round(crowd,2),
-                crowd_category=score_to_category(crowd),
-                wait_minutes=wait,
-                inflow_est=int(max(5, wait//4)),  # rough mapping for demo
-                emergency_est=int(max(0, wait//20)),
-                suggestions=suggestions,
-                recommended_slots=recommended
-            )
-        else:
-            # fallback heuristic
-            fallback = heuristic_predict(hospital, hour, weekday, problem, req.pincode)
-            recommended = available_slots_for_hospital(hospital, after_minutes=10, count=4)
-            return PredictResponse(
-                hospital=hospital,
-                crowd_score=fallback["crowd_score"],
-                crowd_category=score_to_category(fallback["crowd_score"]),
-                wait_minutes=fallback["wait_minutes"],
-                inflow_est=fallback["inflow_est"],
-                emergency_est=fallback["emergency_est"],
-                suggestions=fallback["suggestions"],
-                recommended_slots=recommended
-            )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    recommended = available_slots_for_hospital(hospital, after_minutes=10, count=4)
+
+    return PredictResponse(
+        hospital=hospital,
+        crowd_score=fallback["crowd_score"],
+        crowd_category=score_to_category(fallback["crowd_score"]),
+        wait_minutes=fallback["wait_minutes"],
+        inflow_est=fallback["inflow_est"],
+        emergency_est=fallback["emergency_est"],
+        suggestions=fallback["suggestions"],
+        recommended_slots=recommended
+    )
 
 
-@app.post("/book", response_model=BookResponse, tags=["booking"])
+@app.post("/book", response_model=BookResponse)
 def book(req: BookRequest):
-    # Basic mock booking: generate booking id and token
-    booking_id = "BK" + datetime.now().strftime("%Y%m%d%H%M%S") + str(random.randint(10,99))
-    token = str(random.randint(1000,9999))
-    # Estimated wait = heuristic / small random
+
+    booking_id = "BK" + datetime.now().strftime("%Y%m%d%H%M%S") + str(random.randint(10, 99))
+    token = str(random.randint(1000, 9999))
+
     fallback = heuristic_predict(req.hospital, datetime.now().hour, datetime.now().weekday(), "general_checkup")
     est_wait = max(5, int(fallback["wait_minutes"] * 0.7))
+
     return BookResponse(
         booking_id=booking_id,
         hospital=req.hospital,
