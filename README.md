@@ -1,167 +1,127 @@
-# Akatsuki — Hospital Traffic Predictor
+# 🚀 Akatsuki — Hospital Traffic Predictor
+AI-powered system predicting hospital crowd levels & wait times.
 
-Akatsuki is a small demo/research project that predicts short-term hospital traffic (crowd and wait-time estimates) and provides a tiny booking API. It is implemented as a FastAPI backend with a minimal static frontend for demonstration and local testing.
-
-This README explains how to run the API locally, how the frontend is served, and how to call the `/predict` and `/book` endpoints.
-
----
-
-## Quick Links
-
-- Backend entry: `backend/app.py`
-- Frontend static files: `frontend/` (served at `/static` by the backend)
-- UI entry endpoint: `/ui` (serves `index1.html`)
+Akatsuki is an ML-powered solution designed to help patients, hospitals, and emergency services predict real-time traffic, reduce wait time, and schedule visits efficiently. Built using FastAPI + Python + a lightweight HTML/CSS/JS frontend.
 
 ---
 
-## Requirements
+## 🎯 Problem We Are Solving
+Hospitals often face:
+- Unpredictable patient flow  
+- Long waiting times  
+- Poor resource allocation  
+- No visibility for patients before arrival  
 
-- Python 3.10+ recommended
-- Create a virtual environment and install dependencies from `backend/requirements.txt`:
+Akatsuki fixes this by predicting:
+- Crowd level  
+- Estimated wait time  
+- Best hour to visit  
+- Possible peak timings  
 
-```powershell
-cd akatsuki\backend
-.\venv\Scripts\activate   # Windows PowerShell
+---
+
+## 💡 Our Solution
+Akatsuki combines:
+- Historical data / dummy vitals  
+- Machine learning forecasting  
+- FastAPI inference backend  
+- Simple, fast frontend  
+
+Users get instant predictions with one click.
+
+---
+
+## ⭐ Core Features
+### 🔮 AI-Based Crowd Prediction  
+Forecasts hourly patient inflow + wait times.
+
+### ⚡ FastAPI Prediction API  
+Ultra-quick backend response.
+
+### 🌐 Clean, Simple Frontend  
+HTML/CSS/JS with easy interaction.
+
+### 📊 Demo Booking Flow  
+Shows how prediction integrates into real hospital systems.
+
+### 🏥 Lightweight & Deployable  
+Perfect for hackathons, demos, and integration testing.
+
+---
+
+## 🧱 Tech Stack
+| Layer | Technology |
+|-------|------------|
+| Backend | FastAPI, Python, Joblib, Uvicorn |
+| ML | NumPy, Scikit-learn |
+| Frontend | HTML, CSS, JS |
+| Data | JSON dummy data |
+| Deployment | Render / Railway / Deta (optional) |
+
+---
+
+## 🏗️ Project Structure
+akatsuki/
+│
+├── backend/
+│ ├── app.py
+│ ├── train_model.py
+│ ├── generate_data.py
+│ ├── model.joblib
+│ └── requirements.txt
+│
+├── frontend/
+│ ├── index.html
+│ ├── booking.html
+│ ├── predict.html
+│ └── script.js
+│
+├── starter/
+│ └── dummy-data/
+│
+├── .gitignore
+└── README.md
+
+---
+
+## 🚦 How to Run Locally
+
+1️⃣ Install Backend Dependencies
+```bash
+cd akatsuki/backend
 pip install -r requirements.txt
-```
 
-If you don't have a `venv/` yet, create one first:
+2️⃣ Run FastAPI Server
+uvicorn app:app --reload
 
-```powershell
-python -m venv .venv
-.\venv\Scripts\activate
-pip install -r requirements.txt
-```
+API runs at:
+http://127.0.0.1:8000
 
----
+3️⃣ Open Frontend
+Open:
+akatsuki/frontend/index.html
+in your browser.
 
-## Run the API and serve the UI
+📈 Future Scope
 
-From `akatsuki/backend` run:
+Real hospital data integration
 
-```powershell
-uvicorn app:app --reload --host 127.0.0.1 --port 8000
-```
+Mobile app for alerts & bookings
 
-- Open `http://127.0.0.1:8000/ui` in your browser to load the frontend (`index1.html`).
-- Static frontend files are mounted at `http://127.0.0.1:8000/static/*` (e.g. `predict.html` -> `/static/predict.html`).
+Advanced ML (LSTM, Prophet, Neural models)
 
----
+Multi-hospital comparison dashboard
 
-## API Endpoints
+Real-time OPD counter integration
 
-All endpoints are defined in `backend/app.py` and accept/return JSON. Example requests below use `curl` or JavaScript `fetch`.
+👥 Team
 
-1) POST /predict
+Kishan S T
+Soumya Ranjan Behera
+Vidhika Singh
+Anubhav Gurung
 
-Request JSON (example):
+📬 Contact
 
-```json
-{
-  "hospital": "Manipal",
-  "hour": 14,
-  "weekday": 2,
-  "problem": "fever",
-  "pincode": "560001",
-  "want_booking": true
-}
-```
-
-Response JSON (example):
-
-```json
-{
-  "hospital": "Manipal",
-  "crowd_score": 5.3,
-  "crowd_category": "Moderate",
-  "wait_minutes": 42,
-  "inflow_est": 78,
-  "emergency_est": 6,
-  "suggestions": [{"hospital":"Apollo","est_wait":30}, ...],
-  "recommended_slots": ["2025-11-22 14:00","2025-11-22 14:30"]
-}
-```
-
-Example curl:
-
-```bash
-curl -X POST http://127.0.0.1:8000/predict \
-  -H "Content-Type: application/json" \
-  -d '{"hospital":"Manipal","hour":14,"weekday":2,"problem":"fever"}'
-```
-
-2) POST /book
-
-Request JSON (example):
-
-```json
-{
-  "hospital": "Manipal",
-  "slot": "2025-11-22 14:00",
-  "name": "Alice Example",
-  "phone": "9876543210",
-  "fee_paid": 199.0
-}
-```
-
-Response JSON (example):
-
-```json
-{
-  "booking_id": "BK2025112214304592",
-  "hospital": "Manipal",
-  "slot": "2025-11-22 14:00",
-  "token": "4821",
-  "estimated_wait": 35
-}
-```
-
-Example curl:
-
-```bash
-curl -X POST http://127.0.0.1:8000/book \
-  -H "Content-Type: application/json" \
-  -d '{"hospital":"Manipal","slot":"2025-11-22 14:00","name":"Alice","phone":"9999999999","fee_paid":199}'
-```
-
-Notes:
-- The backend currently uses a heuristic predictor (`heuristic_predict` in `app.py`) and random token generation for bookings. It is intended as a demo, not production-ready.
-- CORS is enabled to allow the static frontend to call the API when served locally.
-
----
-
-## Frontend
-
-- The frontend is a small set of static HTML files in `frontend/` (`index1.html`, `predict.html`, `booking.html`).
-- The frontend expects the backend to serve these files at `/static/` and call `/predict` and `/book` on the same origin.
-
-If you prefer to serve the frontend separately (e.g., from a webserver or GitHub Pages), update the API base URL in the frontend JS from `"/predict"` to your backend host like `"https://api.example.com/predict"`.
-
----
-
-## Development & Testing
-
-- To run a quick local smoke test (after starting uvicorn):
-
-```bash
-curl -s -X POST http://127.0.0.1:8000/predict -H 'Content-Type: application/json' -d '{"hospital":"Manipal"}' | jq
-```
-
-- Use the UI (`/ui`) to exercise predict → booking flows manually.
-
----
-
-## Contributing
-
-- Open an issue or submit a pull request. Keep changes small and focused.
-- If adding models or datasets, do not commit real patient data — use only synthetic or anonymized data.
-
----
-
-## License
-
-MIT License — see the `LICENSE` file in the repository root if present.
-
----
-
-If you'd like, I can also add a `backend/README.md` with the exact run commands for Windows and Linux, and add a small `Makefile` or PowerShell script to run the server locally. Let me know if you want that.
+For collaboration or queries:
+👉 GitHub: https://github.com/KISHAN-ST
