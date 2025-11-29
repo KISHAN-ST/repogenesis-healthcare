@@ -1,5 +1,6 @@
 # Akatsuki — Hospital Traffic Predictor
 
+<<<<<<< HEAD
 Akatsuki is a small demo/research project that predicts short-term hospital traffic (crowd and wait-time estimates) and provides a tiny booking API. It is implemented as a FastAPI backend with a minimal static frontend for demonstration and local testing.
 
 This README explains how to run the API locally, how the frontend is served, and how to call the `/predict` and `/book` endpoints.
@@ -165,3 +166,30 @@ MIT License — see the `LICENSE` file in the repository root if present.
 ---
 
 If you'd like, I can also add a `backend/README.md` with the exact run commands for Windows and Linux, and add a small `Makefile` or PowerShell script to run the server locally. Let me know if you want that.
+=======
+Akatsuki is a hospital traffic prediction project: a small research/demo app that models and predicts hospital visit volumes.
+
+## About This Repository
+
+This project lives inside the Repogenesis healthcare track and focuses on predicting hospital traffic using sample datasets and simple ML models. It includes a backend service, sample dataset, and a minimal frontend.
+
+## Project Structure
+
+```
+backend/        # API, training & model files
+frontend/       # Minimal web UI
+docs/           # Project-specific docs and notes
+README.md       # This file
+```
+
+## Usage
+
+- See `backend/README.md` or `backend/app.py` for running the API.
+- Use `train_model.py` to retrain on provided `dataset.csv`.
+
+## Notes
+
+- Do not use real patient data — use only anonymized or synthetic data.
+- This is an educational/demo project and not for clinical use.
+
+>>>>>>> 98a81f3064f6142823ee5a48298966c9bf3c0ec4

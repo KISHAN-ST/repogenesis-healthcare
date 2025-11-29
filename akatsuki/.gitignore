@@ -1,0 +1,15 @@
+# Python virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Model files
+*.joblib
+
+# Node files (if frontend uses node later)
+node_modules/
+
+# Environment config
+.env

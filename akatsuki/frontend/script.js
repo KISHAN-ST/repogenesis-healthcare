@@ -1,7 +1,8 @@
 console.log("AKATSUKI script loaded");
 
-// GLOBAL variable to store selected hospital
+// GLOBAL variables to store selected hospital/slot
 let selectedHospital = null;
+let selectedSlot = null;
 
 // --------------------------------------------
 // HOSPITAL CARD SELECTION
@@ -10,14 +11,14 @@ function chooseHospital(name) {
   selectedHospital = name;
   console.log("Selected hospital:", selectedHospital);
 
-  // Remove highlight from all cards
-  document.querySelectorAll(".hospital-card").forEach(card => {
-    card.classList.remove("active");
+  // Remove highlight from all cards (predict.html uses class 'hcard' and 'sel')
+  document.querySelectorAll(".hcard").forEach(card => {
+    card.classList.remove("sel");
   });
 
-  // Highlight selected card
-  const card = document.getElementById(name);
-  if (card) card.classList.add("active");
+  // Highlight the matching card by data-name or id
+  const card = document.querySelector(`.hcard[data-name="${name}"]`) || document.getElementById(name);
+  if (card) card.classList.add("sel");
 }
 
 // --------------------------------------------
@@ -41,7 +42,9 @@ async function predictHandler() {
     hour = parseInt(t.split(":")[0]);
   }
 
-  const weekday = new Date().getDay();
+  // Map JS getDay (0=Sun..6=Sat) to Python weekday (0=Mon..6=Sun)
+  const jsDay = new Date().getDay();
+  const weekday = (jsDay + 6) % 7;
   const problem = document.getElementById("problem").value;
   const pincode = document.getElementById("pincode").value || null;
 
@@ -56,7 +59,8 @@ async function predictHandler() {
 
   console.log("Sending payload:", payload);
 
-  const url = "http://127.0.0.1:8000/predict";
+  // use relative path so the frontend works when served by backend at /static or /ui
+  const url = "/predict";
 
   try {
     const res = await fetch(url, {
@@ -84,7 +88,9 @@ async function predictHandler() {
 // SHOW RESULT IN UI
 // --------------------------------------------
 function showResult(data) {
-  document.getElementById("result").style.display = "block";
+  // predict.html uses id `resultCard`
+  const resultEl = document.getElementById("resultCard") || document.getElementById("result");
+  if (resultEl) resultEl.style.display = "block";
 
   document.getElementById("res_hospital").innerText = data.hospital;
   document.getElementById("res_wait").innerText = `${data.wait_minutes} mins`;
@@ -103,7 +109,7 @@ function showResult(data) {
     const el = document.createElement("div");
     el.className = "slot";
     el.innerText = slot;
-    el.onclick = () => selectSlot(el, slot);
+    el.addEventListener('click', () => selectSlot(el, slot));
     slotArea.appendChild(el);
   });
 }
@@ -112,7 +118,38 @@ function showResult(data) {
 // SLOT SELECTION
 // --------------------------------------------
 function selectSlot(el, val) {
-  document.querySelectorAll(".slot").forEach(x => x.classList.remove("selected"));
-  el.classList.add("selected");
+  // predict.html uses class 'sel' for selected slot
+  document.querySelectorAll(".slot").forEach(x => x.classList.remove("sel"));
+  el.classList.add("sel");
+  selectedSlot = val;
   window.selectedSlot = val;
 }
+
+function gotoBooking() {
+  if (!selectedSlot && !window.selectedSlot) return alert('Select a slot first');
+  const hosp = document.getElementById('res_hospital')?.innerText || selectedHospital;
+  const slot = selectedSlot || window.selectedSlot;
+  if (!hosp || !slot) return alert('Missing hospital or slot');
+  localStorage.setItem('ak_booking_hospital', hosp);
+  localStorage.setItem('ak_booking_slot', slot);
+  // redirect to booking page served by backend
+  window.location.href = '/static/booking.html';
+}
+
+// Wire up page events if elements exist
+document.addEventListener('DOMContentLoaded', () => {
+  // Attach hospital card click handlers if present
+  document.querySelectorAll('.hcard').forEach(card => {
+    // prefer data-name attribute
+    const name = card.dataset.name || card.id || card.getAttribute('data-id');
+    card.addEventListener('click', () => {
+      if (name) chooseHospital(name);
+    });
+  });
+
+  const predictBtn = document.getElementById('predictBtn');
+  if (predictBtn) predictBtn.addEventListener('click', predictHandler);
+
+  const goBook = document.getElementById('goBook');
+  if (goBook) goBook.addEventListener('click', gotoBooking);
+});

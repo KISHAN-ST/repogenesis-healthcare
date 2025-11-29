@@ -7,11 +7,12 @@
 <link rel="icon" href="" />
 <style>
   :root{
-    --bg1:#0ea5a4;
-    --bg2:#10b981;
-    --panel-bg: rgba(255,255,255,0.92);
-    --text:#04251a;
-    --muted: rgba(4,37,26,0.65);
+    --primary: #6E5EDF;
+    --secondary: #B9A8FF;
+    --card-bg: rgba(255,255,255,0.7);
+    --text: #2A2A2A;
+    --muted: rgba(42,42,42,0.65);
+    --shadow: 0 4px 20px rgba(0,0,0,0.08);
   }
   *{box-sizing:border-box}
   html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial}
@@ -20,7 +21,7 @@
     align-items:center;
     justify-content:center;
     padding:28px;
-    background: linear-gradient(135deg,var(--bg1) 0%, var(--bg2) 70%, #047857 100%);
+    background: linear-gradient(135deg, #E9E7FC 0%, #F8F9FF 100%);
     color:var(--text);
   }
 
@@ -28,20 +29,20 @@
     width:100%;
     max-width:880px;
     border-radius:14px;
-    background:var(--panel-bg);
-    box-shadow:0 14px 40px rgba(2,6,23,0.15);
+    background:var(--card-bg);
+    box-shadow:var(--shadow);
     padding:22px;
   }
 
   .header{display:flex;gap:12px;align-items:center}
-  .logo{width:56px;height:56px;border-radius:12px;background:#04251a;color:white;display:flex;align-items:center;justify-content:center;font-weight:800}
-  h1{margin:0;font-size:20px}
+  .logo{width:56px;height:56px;border-radius:12px;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800}
+  h1{margin:0;font-size:20px;color:var(--text)}
   p.lead{margin:6px 0 0;color:var(--muted);font-size:13px}
 
   form{margin-top:18px;display:grid;gap:10px}
-  label{font-weight:700;color:#063f2a}
+  label{font-weight:700;color:var(--text)}
   input[type="text"], input[type="tel"], textarea{
-    width:100%;padding:10px;border-radius:10px;border:1px solid rgba(6,63,42,0.08);background:white;color:var(--text);
+    width:100%;padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,0.06);background:white;color:var(--text);
     font-size:15px;
   }
   textarea{resize:vertical}
@@ -50,18 +51,18 @@
   .row .col{flex:1}
 
   .summary{
-    margin-top:10px;padding:12px;border-radius:10px;background:#f0fdf4;border:1px solid rgba(6,63,42,0.06);
-    color:#064e3b;
+    margin-top:10px;padding:12px;border-radius:10px;background:rgba(255,255,255,0.95);border:1px solid rgba(0,0,0,0.04);
+    color:var(--text);
   }
 
   .actions{display:flex;gap:12px;margin-top:12px;flex-wrap:wrap}
   .btn{padding:12px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:800}
-  .btn-primary{background:#065f46;color:white}
-  .btn-ghost{background:transparent;border:1px solid rgba(6,63,42,0.08);color:var(--text)}
+  .btn-primary{background:var(--primary);color:#fff}
+  .btn-ghost{background:transparent;border:1px solid rgba(0,0,0,0.06);color:var(--text)}
 
   /* result block */
   .result-block{margin-top:14px;display:none}
-  .result-inner{padding:12px;border-radius:10px;background:#ecfeff;border:1px solid rgba(6,95,70,0.06)}
+  .result-inner{padding:12px;border-radius:10px;background:rgba(255,255,255,0.95);border:1px solid rgba(0,0,0,0.04)}
   .result-inner div{margin-top:6px}
 
   .small{font-size:13px;color:var(--muted)}
